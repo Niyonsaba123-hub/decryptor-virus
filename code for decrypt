@@ -1,0 +1,73 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <dirent.h>
+#include <cstdio>
+#include <sys/stat.h>
+
+using namespace std;
+
+int totalRestored = 0;
+
+void processDecryption(const string& filePath, const string& password) {
+    string outPath = filePath.substr(0, filePath.length() - 7);
+    ifstream inFile(filePath.c_str(), ios::binary);
+    ofstream outFile(outPath.c_str(), ios::binary);
+    
+    if (!inFile || !outFile) return;
+
+    char buffer;
+    int i = 0;
+    while (inFile.get(buffer)) {
+        outFile.put(buffer ^ password[i % password.length()]);
+        i++;
+    }
+    inFile.close();
+    outFile.close();
+    remove(filePath.c_str());
+    
+    cout << "[SUCCESS] Restored: " << outPath << endl;
+    totalRestored++;
+}
+
+void searchDirectory(string path, string password) {
+    DIR *dir;
+    struct dirent *ent;
+    struct stat st;
+
+    if ((dir = opendir(path.c_str())) == NULL) return;
+
+    while ((ent = readdir(dir)) != NULL) {
+        string name = ent->d_name;
+        if (name == "." || name == "..") continue;
+
+        string fullPath = path + "/" + name;
+        stat(fullPath.c_str(), &st);
+
+        if (S_ISDIR(st.st_mode)) {
+            searchDirectory(fullPath, password);
+        } else {
+            if (name.length() > 7 && name.substr(name.length() - 7) == ".locked") {
+                processDecryption(fullPath, password);
+            }
+        }
+    }
+    closedir(dir);
+}
+
+int main() {
+    string targetDir = "C:/Users";
+    string password;
+
+    cout << "--- DOCUMENTS PDF DECRYPTOR ---" << endl;
+    cout << "Target: " << targetDir << endl;
+    cout << "Enter password to unlock: ";
+    getline(cin, password);
+
+    searchDirectory(targetDir, password);
+
+    cout << "\n-----------------------------------" << endl;
+    cout << "Finished. Total files restored: " << totalRestored << endl;
+    system("pause");
+    return 0;
+}
